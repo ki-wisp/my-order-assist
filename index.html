@@ -1,0 +1,655 @@
+<!doctype html>
+<html lang="my">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Viber Order Assistant</title>
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 14px;
+  background: #f7f8fc;
+  color: #202536;
+  font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+main {
+  max-width: 800px;
+  margin: auto;
+}
+
+h1 { font-size: 24px; }
+h2 { font-size: 18px; }
+
+.card {
+  background: white;
+  border: 1px solid #dfe3ed;
+  border-radius: 14px;
+  padding: 15px;
+  margin: 14px 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.full { grid-column: 1 / -1; }
+
+label {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+input, select, textarea {
+  width: 100%;
+  padding: 11px;
+  border: 1px solid #cbd1df;
+  border-radius: 9px;
+  font: inherit;
+  background: white;
+}
+
+textarea { min-height: 75px; }
+
+.product {
+  border: 1px solid #dfe3ed;
+  border-radius: 12px;
+  padding: 12px;
+  margin: 12px 0;
+}
+
+.variant {
+  border: 1px dashed #cbd1df;
+  border-radius: 10px;
+  padding: 10px;
+  margin: 10px 0;
+}
+
+button {
+  border: 0;
+  border-radius: 9px;
+  padding: 11px 14px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  margin: 4px 0;
+}
+
+.primary {
+  background: #4f46e5;
+  color: white;
+}
+
+.secondary {
+  background: #eef0ff;
+  color: #3730a3;
+}
+
+.danger {
+  background: #fff0ef;
+  color: #b42318;
+}
+
+#output {
+  min-height: 300px;
+  white-space: pre-wrap;
+  font-family: monospace;
+}
+
+@media (max-width: 550px) {
+  .grid { grid-template-columns: 1fr; }
+  .full { grid-column: auto; }
+}
+</style>
+</head>
+
+<body>
+<main>
+
+<h1>Viber Order Assistant</h1>
+
+<section class="card">
+  <h2>Customer Information</h2>
+
+  <div class="grid">
+    <div class="field">
+      <label>Customer Name *</label>
+      <input id="customer">
+    </div>
+
+    <div class="field">
+      <label>Source</label>
+      <select id="source">
+        <option>TT</option>
+        <option>FB</option>
+        <option>Viber</option>
+        <option>Other</option>
+      </select>
+    </div>
+
+    <div class="field full">
+      <label>Receiver Name *</label>
+      <input id="receiver">
+    </div>
+
+    <div class="field full">
+      <label>Phone Number *</label>
+      <input id="phone" inputmode="tel">
+    </div>
+
+    <div class="field full">
+      <label>Address *</label>
+      <textarea id="address"></textarea>
+    </div>
+
+    <div class="field full">
+      <label>Payment *</label>
+      <select id="payment">
+        <option value="">ရွေးပါ</option>
+        <option value="paid">Paid</option>
+        <option value="unpaid">‼️မရှင်းရသေးပါ။</option>
+      </select>
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Products</h2>
+
+  <div id="products"></div>
+
+  <button class="secondary" id="addProduct" type="button">
+    + Add Product
+  </button>
+</section>
+
+<section class="card">
+  <h2>Delivery Note</h2>
+
+  <div class="field">
+    <label>Preset Note</label>
+    <select id="notePreset">
+      <option value="">No Note</option>
+      <option value="Royal နှင့်ပို့ပေးပါရန်">
+        Royal နှင့်ပို့ပေးပါရန်
+      </option>
+      <option value="မပို့မီ ဖုန်းကြိုဆက်ပေးပါရန်။">
+        မပို့မီ ဖုန်းကြိုဆက်ပေးပါရန်။
+      </option>
+    </select>
+  </div>
+
+  <div class="field" style="margin-top:12px">
+    <label>Custom Note (Preset ကို အစားထိုးမည်)</label>
+    <textarea id="customNote"></textarea>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Order Summary</h2>
+  <p id="validation"></p>
+  <p><strong>Total Quantity:</strong> <span id="totalQty">0</span></p>
+  <p><strong>Total Price:</strong> <span id="totalPrice">0 Mmk</span></p>
+</section>
+
+<section class="card">
+  <h2>Viber Output</h2>
+
+  <textarea id="output" readonly></textarea>
+
+  <button class="primary" id="copyBtn" type="button">
+    Copy Order
+  </button>
+
+  <button class="secondary" id="selectBtn" type="button">
+    Select Text
+  </button>
+
+  <button class="danger" id="resetBtn" type="button">
+    Reset
+  </button>
+
+  <p id="copyStatus"></p>
+</section>
+
+</main>
+
+<script>
+"use strict";
+
+const $ = id => document.getElementById(id);
+
+const digitMap = {
+  "၀":"0","၁":"1","၂":"2","၃":"3","၄":"4",
+  "၅":"5","၆":"6","၇":"7","၈":"8","၉":"9"
+};
+
+function englishDigits(value) {
+  return String(value || "").replace(/[၀-၉]/g, d => digitMap[d]);
+}
+
+function money(value) {
+  return Math.round(value).toLocaleString("en-US");
+}
+
+function clean(value) {
+  return String(value || "").trim();
+}
+
+function makeField(label, placeholder, type = "text") {
+  const wrap = document.createElement("div");
+  wrap.className = "field";
+
+  const lab = document.createElement("label");
+  lab.textContent = label;
+
+  const input = document.createElement("input");
+  input.type = type;
+  input.placeholder = placeholder || "";
+
+  if (type === "number") {
+    input.min = "1";
+    input.step = "1";
+    input.inputMode = "numeric";
+  }
+
+  wrap.append(lab, input);
+  return { wrap, input };
+}
+
+function addVariant(product) {
+  const variants = product.querySelector(".variants");
+
+  const box = document.createElement("div");
+  box.className = "variant";
+
+  const heading = document.createElement("strong");
+  heading.textContent = "Variant";
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "danger";
+  remove.textContent = "Remove";
+
+  remove.onclick = () => {
+    box.remove();
+    update();
+  };
+
+  const grid = document.createElement("div");
+  grid.className = "grid";
+
+  const color = makeField("Color / Code *", "");
+  const detail = makeField("Variant Detail", "");
+  const size = makeField("Size *", "");
+  const qty = makeField("Quantity *", "1", "number");
+
+  qty.input.value = "1";
+
+  grid.append(color.wrap, detail.wrap, size.wrap, qty.wrap);
+  box.append(heading, remove, grid);
+  variants.append(box);
+
+  [color.input, detail.input, size.input, qty.input].forEach(input => {
+    input.addEventListener("input", update);
+  });
+}
+
+function addProduct() {
+  const product = document.createElement("div");
+  product.className = "product";
+
+  const heading = document.createElement("h3");
+  heading.textContent = "Product";
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "danger";
+  remove.textContent = "Remove Product";
+
+  remove.onclick = () => {
+    product.remove();
+    update();
+  };
+
+  const grid = document.createElement("div");
+  grid.className = "grid";
+
+  const flagWrap = document.createElement("div");
+  flagWrap.className = "field";
+
+  const flagLabel = document.createElement("label");
+  flagLabel.textContent = "Country Flag";
+
+  const flag = document.createElement("select");
+
+  [
+    ["🇹🇭", "🇹🇭 Thailand"],
+    ["🇯🇵", "🇯🇵 Japan"],
+    ["", "No Flag"]
+  ].forEach(([value, text]) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = text;
+    flag.append(option);
+  });
+
+  flagWrap.append(flagLabel, flag);
+
+  const name = makeField("Product Name *", "");
+  const detail = makeField("Product Detail", "");
+  const price = makeField("Unit Price (MMK) *", "", "number");
+
+  grid.append(flagWrap, name.wrap, detail.wrap, price.wrap);
+
+  const variants = document.createElement("div");
+  variants.className = "variants";
+
+  const addVariantBtn = document.createElement("button");
+  addVariantBtn.type = "button";
+  addVariantBtn.className = "secondary";
+  addVariantBtn.textContent = "+ Add Variant";
+
+  addVariantBtn.onclick = () => {
+    addVariant(product);
+    update();
+  };
+
+  product.append(
+    heading,
+    remove,
+    grid,
+    variants,
+    addVariantBtn
+  );
+
+  $("products").append(product);
+
+  [flag, name.input, detail.input, price.input].forEach(input => {
+    input.addEventListener("input", update);
+    input.addEventListener("change", update);
+  });
+
+  addVariant(product);
+  update();
+}
+
+function readOrder() {
+  const errors = [];
+
+  const customer = clean($("customer").value);
+  const source = $("source").value;
+  const receiver = clean($("receiver").value);
+  const phone = englishDigits(clean($("phone").value)).replace(/\s/g, "");
+  const address = clean($("address").value) || "Address - Pending ‼️";
+  const payment = $("payment").value;
+
+  if (!customer) errors.push("Customer name ဖြည့်ပါ။");
+  if (!receiver) errors.push("Receiver name ဖြည့်ပါ။");
+  if (!phone) errors.push("Phone number ဖြည့်ပါ။");
+  if (!payment) errors.push("Payment ရွေးပါ။");
+
+  let totalQty = 0;
+  let totalPrice = 0;
+
+  const products = [];
+  const equation = [];
+
+  [...$("products").querySelectorAll(".product")].forEach((el, index) => {
+    const fields = [...el.querySelectorAll(".grid input")];
+
+    const flag = el.querySelector(".grid select").value;
+    const name = clean(fields[0].value);
+    const detail = clean(fields[1].value);
+    const price = Number(fields[2].value);
+
+    if (!name) errors.push(`Product ${index + 1}: Name ဖြည့်ပါ။`);
+
+    if (!Number.isInteger(price) || price <= 0) {
+      errors.push(`Product ${index + 1}: Price စစ်ပါ။`);
+    }
+
+    const variants = [];
+
+    [...el.querySelectorAll(".variant")].forEach((variant, vi) => {
+      const inputs = [...variant.querySelectorAll("input")];
+
+      const color = clean(inputs[0].value);
+      const variantDetail = clean(inputs[1].value);
+      const size = clean(inputs[2].value);
+      const qty = Number(inputs[3].value);
+
+      if (!color || !size) {
+        errors.push(`Product ${index + 1}, Variant ${vi + 1}: Color နဲ့ Size ဖြည့်ပါ။`);
+      }
+
+      if (!Number.isInteger(qty) || qty < 1) {
+        errors.push(`Product ${index + 1}, Variant ${vi + 1}: Quantity စစ်ပါ။`);
+      }
+
+      const validQty = Number.isInteger(qty) && qty > 0 ? qty : 0;
+      const validPrice = Number.isInteger(price) && price > 0 ? price : 0;
+
+      totalQty += validQty;
+      totalPrice += validQty * validPrice;
+
+      if (validQty && validPrice) {
+        equation.push({ price: validPrice, qty: validQty });
+      }
+
+      variants.push({
+        color,
+        detail: variantDetail,
+        size,
+        qty: validQty
+      });
+    });
+
+    products.push({
+      flag,
+      name,
+      detail,
+      price,
+      variants
+    });
+  });
+
+  return {
+    errors,
+    customer,
+    source,
+    receiver,
+    phone,
+    address,
+    payment,
+    products,
+    totalQty,
+    totalPrice,
+    equation
+  };
+}
+
+function makeEquation(items) {
+  const grouped = new Map();
+
+  items.forEach(item => {
+    grouped.set(
+      item.price,
+      (grouped.get(item.price) || 0) + item.qty
+    );
+  });
+
+  return [...grouped.entries()]
+    .map(([price, qty]) => {
+      return qty === 1
+        ? money(price)
+        : `${money(price)}*${qty}`;
+    })
+    .join("+");
+}
+
+function buildOutput(order) {
+  const lines = [];
+
+  // Customer name and source
+  lines.push(`${order.customer} (${order.source})`);
+  lines.push("");
+
+  // Products
+  order.products.forEach(product => {
+    const title = [
+      product.name,
+      product.detail
+    ].filter(Boolean).join(" | ");
+
+    lines.push(
+      `${product.flag ? product.flag + " " : ""}**${title}**`
+    );
+
+    lines.push("");
+
+    product.variants.forEach(variant => {
+      lines.push(
+        `${variant.color}${variant.detail ? " | " + variant.detail : ""}`
+      );
+
+      lines.push(`Size - ${variant.size}`);
+      lines.push("");
+
+      lines.push(`${money(product.price)} Mmk`);
+      lines.push("");
+    });
+  });
+
+  // Total
+  const itemWord = order.totalQty === 1 ? "Item" : "Items";
+
+  lines.push(`**Total - ${order.totalQty} ${itemWord}**`);
+
+  lines.push(
+    `${makeEquation(order.equation)}=${money(order.totalPrice)} Mmk`
+  );
+
+  // Payment
+  lines.push("");
+  lines.push("");
+  lines.push(
+    order.payment === "paid"
+      ? "**Paid**"
+      : order.payment === "unpaid"
+        ? "**‼️မရှင်းရသေးပါ။**"
+        : ""
+  );
+
+  // Receiver and phone BELOW Paid
+  lines.push("");
+  lines.push("");
+  lines.push(order.receiver);
+  lines.push(order.phone);
+
+  // Address BELOW Receiver and Phone
+  lines.push(order.address || "Address - Pending ‼️");
+
+  // Delivery note
+  const note = clean($("customNote").value) || $("notePreset").value;
+
+  if (note) {
+    lines.push("");
+    lines.push("");
+    lines.push(`⚠️ **Note -** ${note}`);
+  }
+
+  return lines.join("\n");
+}
+
+function update() {
+  const order = readOrder();
+
+  $("totalQty").textContent = order.totalQty;
+  $("totalPrice").textContent = `${money(order.totalPrice)} Mmk`;
+
+  $("validation").textContent = order.errors.length
+    ? order.errors.join("\n")
+    : "အချက်အလက်များ ပြည့်စုံပါပြီ။";
+
+  $("output").value = buildOutput(order);
+  $("copyBtn").disabled = order.errors.length > 0;
+}
+
+async function copyOutput() {
+  try {
+    await navigator.clipboard.writeText($("output").value);
+    $("copyStatus").textContent = "Copied!";
+  } catch (error) {
+    $("output").focus();
+    $("output").select();
+    $("copyStatus").textContent =
+      "စာသားကို Select လုပ်ထားပါတယ်။ Copy ကိုနှိပ်ပါ။";
+  }
+}
+
+function resetOrder() {
+  if (!confirm("အော်ဒါအသစ်စမလား။")) return;
+
+  [
+    "customer",
+    "receiver",
+    "phone",
+    "address",
+    "customNote"
+  ].forEach(id => $(id).value = "");
+
+  $("payment").value = "";
+  $("notePreset").value = "";
+  $("products").replaceChildren();
+
+  addProduct();
+  update();
+}
+
+[
+  "customer",
+  "source",
+  "receiver",
+  "phone",
+  "address",
+  "payment",
+  "notePreset",
+  "customNote"
+].forEach(id => {
+  $(id).addEventListener("input", update);
+  $(id).addEventListener("change", update);
+});
+
+$("phone").addEventListener("input", () => {
+  $("phone").value = englishDigits($("phone").value);
+});
+
+$("addProduct").addEventListener("click", addProduct);
+$("copyBtn").addEventListener("click", copyOutput);
+
+$("selectBtn").addEventListener("click", () => {
+  $("output").focus();
+  $("output").select();
+});
+
+$("resetBtn").addEventListener("click", resetOrder);
+
+addProduct();
+update();
+</script>
+</body>
+</html>
